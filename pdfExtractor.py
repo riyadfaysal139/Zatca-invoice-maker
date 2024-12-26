@@ -1,178 +1,104 @@
+import os
+import pdfplumber
+import pandas as pd
 from datetime import datetime
-import datetime,re
+import numpy as np
 
-class pdfExtractor:
-    def __init__(self):
-        self=self
+def is_valid_pdf(file_path):
+    try:
+        with open(file_path, 'rb') as f:
+            header = f.read(4)
+            return header == b'%PDF'
+    except Exception:
+        return False
 
-    def extractPdf(poNoLocD,invoicedates):
-        print('Extracting pdf')
-        import pdfplumber
-        import datetime
-        import arabic_reshaper
-        from bidi.algorithm import get_display
-        shpr={}
-        shprs=[]
-        po=[]
-        invNo=0
-        invNO={}
-        poNOd={}
-        shopQTt={}
-        for poNO,poLoc in poNoLocD.items():
-            po.append(poNO)
-            with pdfplumber.open(poLoc) as pdf:
-                page=pdf.pages[0]
-                text=page.extract_text()
+def load_name_mapping(file_path):
+    name_mapping = {}
+    with open(file_path, 'r') as f:
+        for line in f:
+            key, value = line.strip().split(':')
+            name_mapping[key.strip()] = value.strip()
+    return name_mapping
 
-            #print(text)
-            #Determining shop name
-            shopName=''
+def extract_data_from_pdfs(po_date):
+    po_date_directory = os.path.join('PO', po_date)
+    if not os.path.exists(po_date_directory):
+        print(f"No directory found for PO date: {po_date}")
+        return
 
-            shop=['164 BINJALALA','158 RAVALA','140 ABHA','139 JIZAN','137 BINJALALA']
-            defaultInvoiceNo=4245
-            defaultInvoiceDate=datetime.datetime(2021, 9, 30)
-            gap=invoicedates-defaultInvoiceDate
-            gap=str(gap)
-            invoiceCounter=0
-            for i in gap.split():
-                invoiceCounter=int(i)
-                break
+    name_mapping = load_name_mapping('name_mapping.txt')
+    dataframes = {}
+    po_numbers = {}
 
+    for file_name in os.listdir(po_date_directory):
+        if file_name.endswith('.pdf'):
+            file_path = os.path.join(po_date_directory, file_name)
+            if not is_valid_pdf(file_path):
+                print(f"Skipping invalid PDF file: {file_path}")
+                continue
+            print(f"Processing file: {file_path}")
+            all_data = []
+            po_number = file_name.split('337337_')[1].split('_JED')[0]  # Extract PO number from filename
+            with pdfplumber.open(file_path) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        lines = text.split('\n')
+                        # Extract data from row 10 till the row containing the word "Notes"
+                        start_collecting = False
+                        for i, line in enumerate(lines):
+                            if "Notes" in line:
+                                break
+                            if start_collecting:
+                                if '-----------' not in line:
+                                    all_data.append(line.split())
+                            if i >= 10:
+                                start_collecting = True
 
-            for s in text.split('\n'):
-                if shop[0] in s.upper():
-                    shopName='KHAMIS-164'
-                    invNO[shopName]=defaultInvoiceNo+4+(invoiceCounter*5)
-                    if shopName in poNOd:
-                        poNOd[shopName]=str(poNOd[shopName])+' and '+str(poNO)
-                    else:
-                        poNOd[shopName]=poNO
+            df = pd.DataFrame(all_data)
+            # Ensure each row has 7 elements
+            for i in range(len(df)):
+                if len(df.iloc[i]) < 7:
+                    df.iloc[i] = df.iloc[i].tolist() + [None] * (7 - len(df.iloc[i]))
+
+            # Delete columns 3, 4, 5 if they exist, except for the last row
+            if len(df.columns) > 5:
+                df.iloc[:-1, 3] = None
+                df.iloc[:-1, 4] = None
+                df.iloc[:-1, 5] = None
+
+            # Merge data from each odd row, column 0 & 1, and paste them to the previous row's column 1
+            for i in range(1, len(df), 2):
+                if i < len(df):
+                    df.iloc[i-1, 1] = f"{df.iloc[i, 0]} {df.iloc[i, 1]}"
+            # Drop the odd rows after merging, except the last one
+            df = df.drop(df.index[1::2][:-1])
+            # Drop the second last row
+            if len(df) > 1:
+                df = df.drop(df.index[-2])
+
+            # Delete columns 3, 4, 5
+            if len(df.columns) > 5:
+                df = df.drop(df.columns[[3, 4, 5]], axis=1)
+
+            # Rename columns
+            df.columns = ["SKU", "Description", "Unit Price", "Quantity", "Price", "Vat", "Amount"]
+
+            # Replace name based on mapping
+            replaced = False
+            for key, value in name_mapping.items():
+                if key in file_name:
+                    file_name = value
+                    replaced = True
                     break
-                elif shop[1] in s.upper():
-                    shopName='RAVALA-158'
-                    invNO[shopName]=defaultInvoiceNo+2+(invoiceCounter*5)
-                    if shopName in poNOd:
-                        poNOd[shopName]=str(poNOd[shopName])+' and '+str(poNO)
-                    else:
-                        poNOd[shopName]=poNO
-                    break
-                elif shop[2] in s.upper():
-                    shopName='ABHA-140'
-                    invNO[shopName]=defaultInvoiceNo+1+(invoiceCounter*5)
-                    if shopName in poNOd:
-                        poNOd[shopName]=str(poNOd[shopName])+' and '+str(poNO)
-                    else:
-                        poNOd[shopName]=poNO
-                    break
-                elif shop[3] in s.upper():
-                    shopName='JIZAN-139'
-                    invNO[shopName]=defaultInvoiceNo+(invoiceCounter*5)
-                    if shopName in poNOd:
-                        poNOd[shopName]=str(poNOd[shopName])+' and '+str(poNO)
-                    else:
-                        poNOd[shopName]=poNO
-                    break
-                elif shop[4] in s.upper():
-                    shopName='KHAMIS-137'
-                    invNO[shopName]=defaultInvoiceNo+3+(invoiceCounter*5)
-                    if shopName in poNOd:
-                        poNOd[shopName]=str(poNOd[shopName])+' and '+str(poNO)
-                    else:
-                        poNOd[shopName]=poNO
-                    break
+            if not replaced:
+                # Keep only JED_**** part if no mapping is found
+                file_name = 'JED_' + file_name.split('JED_')[1].split('_')[0]
 
-            page=pdf.pages[0]
-            text=page.extract_text()
-            
-            text2=text.split(' ')
-            
-        
-            pono=(text2[text2.index('Order')+1]) # Extracting pono from po
-            
-            #print('************')               
-            #parsing=(text2[text2.index('Date:')+1]).split('\n')[0] # Extracting podate from po
+            dataframes[file_name] = df
+            po_numbers[file_name] = po_number
 
-            text3=text.split('\n')
-            
-            quantityVatTotal=re.split('\s+',(text3[-17]))
-            
-            quantity=quantityVatTotal[5]
-            vatlessTotal=quantityVatTotal[6]
-            vat=quantityVatTotal[7]
-            total=quantityVatTotal[8]
-            
-            products=[23,27,80,88,158,169,192,214,245,389,522,648,649,650,651,652,653,654,655,656,657,658,659,959,194]
-            arabic=[' ',' ','رجله','ملوخية ',' ',' ',' ',' ',' ',' ','خس','بقدونس ','كزبرة ','نعناع','سبانخ','شبت ','حبق ','جرجير ','كراث ','بصل أخضر ','فجل أحمر ','فجل أبيض ','سلك ',' ',' ']
-            eng=['Cabbage-white','Banger','Regla','Mulukhia','Cauliflower','Lettuce-Chinese','Cabbage-red','Celery','Lettuce--round','Broccoli','Lettuce','Parsely','Coriander','Mint','Spinach','Dill','Habak','Gerger','Leeks','Onion-Green','Red-Turnip','White-Turnip','Silk','Lettuce-Round','Brocoli']
-
-
-            i=0
-            text4=[]
-            productList=[]
-            while i>=0:
-                if text3[11+i]=='-----------' or text3[11+i]=='____________________________________________________________________________________________________________________________________':
-                    
-                    break
-                else:
-                    
-                    text4.append(text3[11+i])
-                i=i+2
-
-            for i in text4:
-                t=re.split('\s+', i)
-                #print(t)
-                #del t[-1:-2]
-                #print(t)
-                del t[1]
-                #print(t)
-                del t[2]
-                #print(t)
-                del t[3]
-                #print(t)
-                del t[2]
-                #print(t)
-                del t[5]
-                #print(t,'&&&&&')
-
-                t[1], t[2] = t[2], t[1]
-                t[3], t[4] = t[4], t[3]
-                
-                #print(shopName,t)
-                aa=products.index(int(t[0]))
-                t.insert(1, eng[aa])
-                #t.insert(2,arabic[aa])
-                productList.append(t)
-
-            if shopName not in shpr:
-                shpr[shopName]=productList
-                shopQTt[shopName]=[quantity,vatlessTotal,vat,total]
-            else:
-                lll=[quantity,vatlessTotal,vat,total]
-                shopQTt[shopName]=[float(x) + float(y) for (x, y) in zip(shopQTt[shopName], lll)]
-                for i in range(len(shopQTt[shopName])):
-                    shopQTt[shopName][i]="{:.5f}".format(shopQTt[shopName][i])
-                    #print(i)
-                for i in shpr[shopName]:
-                    for j in productList:
-                        if str(i[0])==str(j[0]):
-                            i[2]=int(i[2])+int(j[2])
-                            i[4]=float(i[4])+float(j[4])
-                            i[4]=str(round(float(i[4]),4))
-                            
-                            i[5]=float(i[5])+float(j[5])
-                            i[5]=str(round(float(i[5]),4))
-                            productList.remove(j)
-                shpr[shopName]=shpr[shopName]+productList
-                
-
-                #print(productList,'#****#',shpr[shopName],type(shpr[shopName]),'&&&&&\n&&')
-            #print(shopQTt)
-            
-            #shopQTt[shopName]=[quantity,vatlessTotal,vat,total]
-            #print(shopName,'#\n',shpr,'*\n',po,'*\n',invNO,'*\n',invNo,'*\n',poNOd,'*\n',shopQTt,'*       *\n',productList)
-
-        print('Pdf Extraction Done')
-        
-        #print(shpr,'*\n',po,'*\n',invNO,'*\n',invNo,'*\n',poNOd,'*\n',shopQTt,'*       *\n',productList)
-        return shpr,po,invNO,invNo,poNOd,shopQTt
-#
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.max_colwidth', None)
+    print(dataframes)
+    return dataframes, po_numbers

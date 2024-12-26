@@ -1,48 +1,28 @@
-import imp
+from datetime import datetime, timedelta
+import pytz
 
+ksa_timezone = pytz.timezone('Asia/Riyadh')
 
-class dateTimeHandler:
-    def __init__(self):
-        self=self
-    
-    def hanleDateTime(temporr):
-        import datetime
-        import calendar
-        today=datetime.date.today()
-        #yesterday = datetime.date.today() + datetime.timedelta(-1)
-        #tomorrow = datetime.date.today() + datetime.timedelta(1)
-        last_day_of_month = calendar.monthrange(today.year, today.month)[1]
-        print(last_day_of_month)
-        
-        date_string=str(datetime.date.today()+datetime.timedelta(temporr))
+def get_date(days=0, specific_date=None):
+    if specific_date:
+        date = datetime.strptime(specific_date, "%Y-%m-%d")
+    else:
+        date = datetime.now(ksa_timezone)
+    return (date + timedelta(days=days)).date()
 
-        print('Looking Po for date: '+str(date_string))
-        parsingdates = datetime.datetime.strptime(date_string, "%Y-%m-%d")
-        invoicedates=(parsingdates)+ datetime.timedelta(days=1)
+def get_day(date):
+    if isinstance(date, str):
+        date = datetime.strptime(date, "%Y-%m-%d")
+    return date.strftime("%A")
 
-        for z in str(parsingdates).split():
-            parsingdate=z
-            break
-        for z in str(invoicedates).split():
-            invoicedate=z
-            break
-
-        c=str(datetime.datetime.now().strftime("%H%M%S"))
-        isprintTime=False
-        statementTime=False
-        print(datetime.date(today.year, today.month, last_day_of_month))
-        if int(c)>=180000 :
-            isprintTime=True
-            if date_string == str(datetime.date(today.year, today.month, last_day_of_month)):
-                statementTime=True
-                print('its statement and printing time')
-            else:
-                statementTime=False
-        statementTexLoc=datetime.datetime.now()+ datetime.timedelta(0)
-        statementTexLoc=statementTexLoc.strftime("%B-%Y")
-        statementTexLoc=f'C:/pdfInvoiceMaker/statement-{statementTexLoc}.txt'
-
-        with open(statementTexLoc, 'a+') as f:
-            print(statementTexLoc)
-        
-        return date_string,parsingdates,parsingdate,invoicedates,invoicedate,isprintTime,statementTime,statementTexLoc
+""" Example usage:
+print("Today's date:", get_date())
+print("Today is:", get_day(get_date()))
+print("Date 10 days from today:", get_date(10))
+print("Day 10 days from today:", get_day(get_date(10)))
+print("Date 10 days before today:", get_date(-10))
+print("Day 10 days before today:", get_day(get_date(-10)))
+print("Specific date (2023-10-01):", get_date(specific_date="2023-10-01"))
+print("Day of specific date (2023-10-01):", get_day(get_date(specific_date="2023-10-01")))
+print("Date 5 days after specific date (2023-10-01):", get_date(5, "2023-10-01"))
+print("Day 5 days after specific date (2023-10-01):", get_day(get_date(5, "2023-10-01")))"""
