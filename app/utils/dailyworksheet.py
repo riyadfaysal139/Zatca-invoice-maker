@@ -18,8 +18,8 @@ class DailyWorksheetPDF:
         self.description_mapping = self.load_mapping((ROOT / 'files' / 'Texts' / 'description_mapping.txt').as_posix())
         # Register Amiri font
         self.pdf = FPDF(orientation='P', unit='mm', format=(420, 297))  # A3 landscape page
-        self.pdf.add_font("Amiri", '', '/Volumes/Mac SD 1/Study/My codes/Autoinvoice July 2025/files/Fonts/Amiri-Regular.ttf', uni=True)
-        self.pdf.add_font("Amiri", 'B', '/Volumes/Mac SD 1/Study/My codes/Autoinvoice July 2025/files/Fonts/Amiri-Bold.ttf', uni=True)
+        self.pdf.add_font("Amiri", '', 'files/Fonts/Amiri-Regular.ttf', uni=True)
+        self.pdf.add_font("Amiri", 'B', 'files/Fonts/Amiri-Bold.ttf', uni=True)
 
     def load_mapping(self, file_path):
         mapping = {}

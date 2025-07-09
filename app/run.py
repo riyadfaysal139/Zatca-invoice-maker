@@ -7,4 +7,4 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 if __name__ == "__main__":
-    run_pipeline("2025-07-05")  # You can change the date anytime
+    run_pipeline("YYYY-MM-DD")  # replace with actual date(format: YYYY-MM-DD , example: 2025-07-09) or leave as is for today 

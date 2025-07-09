@@ -1,13 +1,13 @@
 from utils.date_utils import get_date, get_day
 
 class POInvoiceSession:
-    def __init__(self, po_date: str = None):
-        self.po_date = po_date or get_date()
-        self.invoice_date = get_date(1, self.po_date)
+    def __init__(self, po_date=None):
+        self.po_date = get_date(0, po_date)
+        self.invoice_date = get_date(1, po_date)
         self.po_day = get_day(self.po_date)
         self.invoice_day = get_day(self.invoice_date)
 
-    def __str__(self):
+    def __repr__(self):
         return (
             f"POInvoiceSession(\n"
             f"  PO Date: {self.po_date} ({self.po_day})\n"

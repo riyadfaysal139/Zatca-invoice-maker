@@ -24,8 +24,8 @@ class PDFCreator:
 
         # Register Amiri font
         self.pdf = FPDF(orientation='P', unit='mm', format=(420, 297))  # A3 landscape page
-        self.pdf.add_font("Amiri", '', '/Volumes/Mac SD 1/Study/My codes/Autoinvoice July 2025/files/Fonts/Amiri-Regular.ttf', uni=True)
-        self.pdf.add_font("Amiri", 'B', '/Volumes/Mac SD 1/Study/My codes/Autoinvoice July 2025/files/Fonts/Amiri-Bold.ttf', uni=True)
+        self.pdf.add_font("Amiri", '', 'files/Fonts/Amiri-Regular.ttf', uni=True)
+        self.pdf.add_font("Amiri", 'B', 'files/Fonts/Amiri-Bold.ttf', uni=True)
 
     def load_mapping(self, file_path):
         mapping = {}
@@ -115,9 +115,14 @@ class PDFCreator:
             if merge_by_shop:
                 invoice_number = f"{base_invoice}"
             else:
+                location_po_count = len(meta_df[meta_df['file_name'].str.contains(location_code)])
                 count = invoice_counters.get(location_name, 0) + 1
                 invoice_counters[location_name] = count
-                invoice_number = f"{base_invoice}({count})"
+                if location_po_count == 1:
+                    invoice_number = f"{base_invoice}"
+                else:
+                    invoice_number = f"{base_invoice}-{count}"
+
 
             pdf = FPDF(format='A3')
             pdf.add_page()
