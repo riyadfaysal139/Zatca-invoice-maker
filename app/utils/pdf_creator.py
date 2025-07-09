@@ -100,7 +100,7 @@ class PDFCreator:
         self.generate_mode(merge_by_shop=True)
         self.generate_mode(merge_by_shop=False)
 
-    def generate_mode(self, merge_by_shop):
+    def generate_mode(self, merge_by_shop, force=False):
         conn = sqlite3.connect(self.db_path)
         meta_df = pd.read_sql_query("SELECT * FROM po_metadata WHERE po_release_date = ?", conn, params=(self.po_date,))
         if meta_df.empty:
@@ -159,6 +159,13 @@ class PDFCreator:
                 count = invoice_counters.get(location_name, 0) + 1
                 invoice_counters[location_name] = count
                 invoice_number = f"{base_invoice}" if location_po_count == 1 else f"{base_invoice}-{count}"
+
+            # 🔒 Skip if invoice already exists in metadata unless force=True
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM invoice_metadata WHERE invoice_number = ?", (invoice_number,))
+            if cursor.fetchone() and not force:
+                print(f"🔁 Invoice already exists for {invoice_number}, skipping.")
+                continue
 
             pdf = FPDF(format='A3')
             pdf.add_page()
