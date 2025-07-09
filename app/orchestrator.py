@@ -15,7 +15,7 @@ def run_pipeline(po_date: str = None):
     print(session)
 
     # ✅ Download POs using the session date
-    #PODownloader.login()
+    PODownloader.login()
     po_path = Path("files/PO") / session.po_date
     extractor = PDFExtractor(po_folder=po_path)
     extractor.extract()

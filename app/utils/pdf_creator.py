@@ -8,6 +8,7 @@ import codecs
 from pathlib import Path
 import arabic_reshaper
 from bidi.algorithm import get_display
+from datetime import datetime
 
 class PDFCreator:
     def __init__(self, session, db_path='files/DB/downloaded_files.db', output_dir='files/Invoices'):
@@ -22,7 +23,6 @@ class PDFCreator:
         self.description_mapping = self.load_mapping('files/Texts/description_mapping.txt')
         self.arabic_description_mapping = self.load_mapping('files/Texts/arabic_description_mapping.txt')
 
-        # Register Amiri font
         self.pdf = FPDF(orientation='P', unit='mm', format=(420, 297))  # A3 landscape page
         self.pdf.add_font("Amiri", '', 'files/Fonts/Amiri-Regular.ttf', uni=True)
         self.pdf.add_font("Amiri", 'B', 'files/Fonts/Amiri-Bold.ttf', uni=True)
@@ -58,6 +58,44 @@ class PDFCreator:
                     name_map[key.strip()] = value.strip()
         return name_map, base_invoice_numbers
 
+    def save_invoice_details(self, conn, invoice_number, file_name, location_code, location_name, total_qty, total_price, total_vat, total_amt, po_numbers):
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        INSERT OR REPLACE INTO invoice_metadata (
+            invoice_number, invoice_date, po_date, location_code, location_name,
+            total_quantity, total_price, total_vat, total_amount, file_name,
+            status, version, is_locked, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'final', 1, 1, ?, ?)
+        """, (
+            invoice_number, self.invoice_date, self.po_date, location_code, location_name,
+            total_qty, total_price, total_vat, total_amt, file_name,
+            now, now
+        ))
+
+        for po in po_numbers:
+            cursor.execute("""
+            INSERT OR IGNORE INTO invoice_po_link (invoice_number, po_number)
+            VALUES (?, ?)
+            """, (invoice_number, po))
+
+        table_name = f"invoice_items_{invoice_number.replace('-', '_')}_v1"
+        cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+        cursor.execute(f"""
+            CREATE TABLE {table_name} (
+                SKU TEXT,
+                Description TEXT,
+                [Unit Price] REAL,
+                Quantity INTEGER,
+                Price REAL,
+                Vat REAL,
+                Amount REAL
+            )
+        """)
+
+        return table_name
+
     def generate_all(self):
         self.generate_mode(merge_by_shop=True)
         self.generate_mode(merge_by_shop=False)
@@ -76,7 +114,7 @@ class PDFCreator:
             if merge_by_shop:
                 po_numbers = group['po_number'].tolist()
                 if len(po_numbers) == 1:
-                    continue  # ⛔ skip single-PO shops in merged mode
+                    continue
                 location_code = key
                 location_name = self.name_mapping.get(location_code, location_code)
                 dfs = [pd.read_sql_query(f"SELECT * FROM po_{po}", conn) for po in po_numbers]
@@ -88,6 +126,7 @@ class PDFCreator:
                     'Vat': 'sum',
                     'Amount': 'sum'
                 })
+                meta_row = group.iloc[0]
                 total_qty = df['Quantity'].sum()
                 total_amt = df['Amount'].sum()
                 total_price = round(total_amt / 1.15, 4)
@@ -105,6 +144,7 @@ class PDFCreator:
                 total_price = round(total_amt / 1.15, 4)
                 total_vat = round(total_amt - total_price, 4)
                 display_po = f"PO No: {po}"
+                meta_row = group
 
             base_number = self.base_invoice_numbers.get(location_name, 10000)
             base_date = pd.to_datetime("2024-12-24")
@@ -118,11 +158,7 @@ class PDFCreator:
                 location_po_count = len(meta_df[meta_df['file_name'].str.contains(location_code)])
                 count = invoice_counters.get(location_name, 0) + 1
                 invoice_counters[location_name] = count
-                if location_po_count == 1:
-                    invoice_number = f"{base_invoice}"
-                else:
-                    invoice_number = f"{base_invoice}-{count}"
-
+                invoice_number = f"{base_invoice}" if location_po_count == 1 else f"{base_invoice}-{count}"
 
             pdf = FPDF(format='A3')
             pdf.add_page()
@@ -136,8 +172,15 @@ class PDFCreator:
             os.makedirs(folder, exist_ok=True)
             po_joined = "_".join(po_numbers)
             filename = f"{invoice_number}_{location_name}_{po_joined}.pdf"
-            pdf.output(os.path.join(folder, filename))
-            print(f"✅ Invoice generated: {filename}")
+            filepath = os.path.join(folder, filename)
+            pdf.output(filepath)
+
+            table_name = self.save_invoice_details(conn, invoice_number, filename, location_code, location_name,
+                                                  total_qty, total_price, total_vat, total_amt, po_numbers)
+            df.to_sql(table_name, conn, if_exists='replace', index=False)
+            print(f"✅ Invoice generated and saved: {filename}")
+
+        conn.commit()
         conn.close()
 
     def setup_fonts(self, pdf):
@@ -230,7 +273,7 @@ class PDFCreator:
         tlv5 = f"05{len(str(vat_amount)):02x}{str(vat_amount).encode().hex()}"
 
         tlv = f"{tlv1}{tlv2}{tlv3}{tlv4}{tlv5}"
-        b64 = codecs.encode(codecs.decode(tlv, 'hex'), 'base64').decode().replace('\n', '')
+        b64 = codecs.encode(codecs.decode(tlv, 'hex'), 'base64').decode().replace('', '')
 
         qr = qrcode.QRCode(version=1, box_size=3, border=0.1)
         qr.add_data(b64)
