@@ -166,7 +166,6 @@ class PDFCreator:
             if cursor.fetchone() and not force:
                 print(f"🔁 Invoice already exists for {invoice_number}, skipping.")
                 continue
-
             pdf = FPDF(format='A3')
             pdf.add_page()
             self.setup_fonts(pdf)

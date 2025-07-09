@@ -6,8 +6,8 @@
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>urn:zatca:invoice:standard:1.0</cbc:CustomizationID>
   <cbc:ProfileID>reporting:1.0</cbc:ProfileID>
-  <cbc:ID>ff4ec5ee-1e3d-4c96-aaa4-c2697bb3ddb7</cbc:ID>
-  <cbc:UUID>72dc5e66-06ac-4503-8058-6de2dccd811b</cbc:UUID>
+  <cbc:ID>029631e7-680e-49cf-8b43-c5741f029058</cbc:ID>
+  <cbc:UUID>06beb60d-7985-43d6-9697-18213e870aad</cbc:UUID>
   <cbc:IssueDate>2025-07-10</cbc:IssueDate>
   <cbc:InvoiceTypeCode>388</cbc:InvoiceTypeCode>
   <cac:AccountingSupplierParty>

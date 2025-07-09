@@ -49,6 +49,24 @@ class DailyWorksheetPDF:
             print(f"❌ No POs found for {self.po_date}")
             return
 
+        # Set output path first
+        output_path = os.path.join(self.output_dir, f"worksheet_{self.po_date}.pdf")
+        filename = os.path.basename(output_path)
+
+        # Initialize PrintManager early
+        try:
+            from utils.print_manager import PrintManager
+            pm = PrintManager(self.db_path)
+        except Exception as e:
+            print(f"⚠️ PrintManager import failed: {e}")
+            pm = None
+
+        # If file exists and PrintManager says "no need to print", skip everything
+        if os.path.exists(output_path) and pm and not pm.should_print(filename, output_path):
+            print(f"⏩ Worksheet already printed and unchanged: {filename}")
+            return
+
+        # Proceed with generation
         shop_po_map = {}
         sku_data = {}
 
@@ -65,12 +83,11 @@ class DailyWorksheetPDF:
 
         conn.close()
 
-        pdf = FPDF(orientation='P', unit='mm', format=(420, 297))  # Full A3 landscape page
+        pdf = FPDF(orientation='P', unit='mm', format=(420, 297))
         pdf.add_page()
         pdf.set_font("Arial", 'B', 14)
         pdf.cell(0, 12, f"Daily Worksheet - Date: {self.po_date}", ln=True, align='C')
         pdf.ln(4)
-        pdf.set_font("Arial", 'B', 12)
         pdf.set_font("Arial", 'B', 12)
 
         shops = list(shop_po_map.keys())
@@ -79,7 +96,7 @@ class DailyWorksheetPDF:
         shop_col_width = dynamic_width / len(shops) if shops else 40
         col_widths = [30, 60] + [shop_col_width] * len(shops) + [30]
 
-        # Header row 1: Shop names
+        # Header
         pdf.set_fill_color(220, 220, 220)
         pdf.cell(col_widths[0], 10, "SKU", 1, 0, 'C', fill=True)
         pdf.cell(col_widths[1], 10, "Description", 1, 0, 'C', fill=True)
@@ -87,7 +104,6 @@ class DailyWorksheetPDF:
             pdf.cell(col_widths[2+i], 10, shop, 1, 0, 'C', fill=True)
         pdf.cell(col_widths[-1], 10, "TOTAL", 1, 1, 'C', fill=True)
 
-        # Header row 2: PO numbers under each shop
         pdf.set_font("Arial", '', 10)
         pdf.cell(col_widths[0], 8, "", 1)
         pdf.cell(col_widths[1], 8, "", 1)
@@ -99,10 +115,11 @@ class DailyWorksheetPDF:
             pdf.set_xy(x + col_widths[2+i], y)
         pdf.cell(col_widths[-1], 8, "", 1, 1)
 
-        # Body: SKU rows
+        # Body
         available_height = pdf.h - pdf.t_margin - pdf.b_margin - pdf.get_y()
         num_rows = len(sku_data)
         row_height = available_height / num_rows if num_rows else 10
+
         for (sku, desc), shop_data in sorted(sku_data.items(), key=lambda x: int(x[0][0])):
             pdf.cell(col_widths[0], row_height, str(sku), 1)
             mapped_desc = self.description_mapping.get(str(sku), str(desc))
@@ -122,20 +139,10 @@ class DailyWorksheetPDF:
             pdf.cell(col_widths[-1], row_height, str(total), 1, 1, 'C')
             pdf.set_font("Arial", '', 12)
 
-            # (REMOVED detailed PO breakdown rows as per updated instruction)
-            # Previously inserted per-PO quantity rows are removed.
-            # Instead, multiple PO quantities are shown using + in main row.
-        output_path = os.path.join(self.output_dir, f"worksheet_{self.po_date}.pdf")
         pdf.output(output_path)
         print(f"✅ Worksheet saved: {output_path}")
 
-        # Print using PrintManager if not already printed
-        try:
-            from utils.print_manager import PrintManager
-            pm = PrintManager(self.db_path)
-            filename = os.path.basename(output_path)
-            if pm.should_print(filename, output_path):
-                if pm.print_file(output_path):
-                    pm.update_print_log(filename)
-        except Exception as e:
-            print(f"⚠️ Could not print worksheet: {e}")
+        if pm and pm.should_print(filename, output_path):
+            if pm.print_file(output_path):
+                pm.update_print_log(filename)
+
